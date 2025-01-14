@@ -155,12 +155,6 @@
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
             <div class="settings">
                 <div class="settings-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="keepAudio">
-                        保留音频文件
-                    </label>
-                </div>
-                <div class="settings-group">
                     <label class="select-label">翻译目标语言（可选）</label>
                     <select id="targetLang">
                         <option value="">不翻译</option>
@@ -196,7 +190,6 @@
         const selectedFiles = document.getElementById('selectedFiles');
         const startButton = document.getElementById('startButton');
         const taskList = document.getElementById('taskList');
-        const keepAudio = document.getElementById('keepAudio');
         const targetLang = document.getElementById('targetLang');
         const keepOriginal = document.getElementById('keepOriginal');
         
@@ -231,7 +224,6 @@
         function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('keep_audio', keepAudio.checked);
             formData.append('keep_original', keepOriginal.checked);
             if (targetLang.value) {
                 formData.append('target_lang', targetLang.value);

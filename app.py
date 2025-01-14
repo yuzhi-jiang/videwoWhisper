@@ -93,7 +93,6 @@ def upload_file():
 
         # 获取翻译设置
         target_lang = request.form.get('target_lang')
-        keep_audio = request.form.get('keep_audio', 'false').lower() == 'true'
         keep_original = request.form.get('keep_original', 'false').lower() == 'true'
 
         # 添加任务到处理队列
@@ -102,7 +101,6 @@ def upload_file():
             file_path=file_path,
             output_dir=app.config['UPLOAD_FOLDER'],
             file_type=file_type,
-            keep_audio=keep_audio,
             target_lang=target_lang,
             keep_original=keep_original
         )

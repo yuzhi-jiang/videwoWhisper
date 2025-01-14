@@ -98,8 +98,8 @@ class TaskProcessor:
             if file_type == 'video':
                 os.remove(audio_file)
                 os.remove(file_path)
-            elif not task.get('keep_audio', False):  # 如果是音频文件且不保留，则删除
-                os.remove(file_path)
+            else:
+                os.remove(file_path)  # 音频文件处理完后也删除
 
             # 计算处理时间
             process_time = round(time.time() - start_time, 1)
@@ -123,14 +123,13 @@ class TaskProcessor:
             })
             logging.error(f"处理任务 {task_id} 时出错: {str(e)}")
 
-    def add_task(self, task_id, file_path, output_dir, file_type='video', keep_audio=False, target_lang=None, keep_original=False):
+    def add_task(self, task_id, file_path, output_dir, file_type='video', target_lang=None, keep_original=False):
         """
         添加任务到队列
         :param task_id: 任务ID
         :param file_path: 文件路径
         :param output_dir: 输出目录
         :param file_type: 文件类型 ('video' 或 'audio')
-        :param keep_audio: 是否保留音频文件
         :param target_lang: 目标翻译语言（可选）
         :param keep_original: 是否保留原文（生成双语字幕）
         """
@@ -145,7 +144,6 @@ class TaskProcessor:
             'file_path': file_path,
             'output_dir': output_dir,
             'file_type': file_type,
-            'keep_audio': keep_audio,
             'target_lang': target_lang,
             'keep_original': keep_original
         })

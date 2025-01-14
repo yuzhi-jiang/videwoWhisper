@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: 'Microsoft YaHei', sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -18,13 +18,14 @@
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        h1 {
+        h1, h2 {
             color: #333;
             text-align: center;
             margin-bottom: 30px;
         }
         .upload-form {
             text-align: center;
+            margin-bottom: 40px;
         }
         .file-input {
             display: none;
@@ -52,9 +53,29 @@
             margin: 10px 0;
             color: #666;
         }
-        .progress-container {
-            margin: 20px 0;
-            display: none;
+        .task-list {
+            margin-top: 30px;
+        }
+        .task-item {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .task-title {
+            font-weight: bold;
+            color: #333;
+        }
+        .task-status {
+            font-size: 14px;
+            color: #666;
         }
         .progress {
             width: 100%;
@@ -62,40 +83,58 @@
             background-color: #f0f0f0;
             border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin: 10px 0;
         }
         .progress-bar {
             width: 0%;
             height: 100%;
             background-color: #4CAF50;
             transition: width 0.5s ease-in-out;
-            position: relative;
         }
-        .progress-text {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-        .progress-percentage {
-            color: #666;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-        .status {
-            text-align: center;
-            color: #666;
-            margin: 10px 0;
-            min-height: 20px;
-        }
-        .error {
-            color: #f44336;
-        }
-        #downloadBtn {
-            display: none;
+        .download-btn {
             background-color: #2196F3;
+            display: none;
         }
-        #downloadBtn:hover {
+        .download-btn:hover {
             background-color: #1976D2;
+        }
+        .settings {
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .settings-group {
+            margin-bottom: 15px;
+        }
+        .settings-group:last-child {
+            margin-bottom: 0;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+        .select-label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            color: #333;
+        }
+        .file-actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
         }
     </style>
 </head>
@@ -103,144 +142,206 @@
     <div class="container">
         <h1>视频字幕提取工具</h1>
         <div class="upload-form">
-            <input type="file" id="videoFile" class="file-input" accept=".mp4,.avi,.mkv,.mov">
-            <button class="upload-btn" onclick="document.getElementById('videoFile').click()">选择视频文件</button>
-            <button class="upload-btn" id="uploadBtn" onclick="uploadVideo()" disabled>开始处理</button>
-            <button class="upload-btn" id="downloadBtn" onclick="downloadSrt()">下载字幕文件</button>
-            <div class="file-name" id="fileName"></div>
-            <div class="progress-container" id="progressContainer">
-                <div class="progress-text" id="progressText">准备处理...</div>
-                <div class="progress">
-                    <div class="progress-bar" id="progressBar"></div>
+            <input type="file" id="fileInput" class="file-input" accept=".mp4,.avi,.mkv,.mov,.mp3,.wav,.m4a,.aac,.flac" multiple>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
+            <div class="settings">
+                <div class="settings-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="keepAudio">
+                        保留音频文件
+                    </label>
                 </div>
-                <div class="progress-percentage" id="progressPercentage">0%</div>
+                <div class="settings-group">
+                    <label class="select-label">翻译目标语言（可选）</label>
+                    <select id="targetLang">
+                        <option value="">不翻译</option>
+                        <option value="英语">英语</option>
+                        <option value="日语">日语</option>
+                        <option value="韩语">韩语</option>
+                        <option value="法语">法语</option>
+                        <option value="德语">德语</option>
+                        <option value="西班牙语">西班牙语</option>
+                        <option value="俄语">俄语</option>
+                        <option value="中文">中文</option>
+                    </select>
+                </div>
             </div>
-            <div class="status" id="status"></div>
+            <div id="selectedFiles" class="selected-files"></div>
+            <div class="file-actions">
+                <button class="upload-btn" id="startButton" style="display: none;" onclick="startProcessing()">开始处理</button>
+            </div>
         </div>
+
+        <h2>任务列表</h2>
+        <div id="taskList" class="task-list"></div>
     </div>
 
     <script>
-        const videoFile = document.getElementById('videoFile');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const fileName = document.getElementById('fileName');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
-        const progressPercentage = document.getElementById('progressPercentage');
-        const status = document.getElementById('status');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFiles = document.getElementById('selectedFiles');
+        const startButton = document.getElementById('startButton');
+        const taskList = document.getElementById('taskList');
+        const keepAudio = document.getElementById('keepAudio');
+        const targetLang = document.getElementById('targetLang');
+        
+        let pendingFiles = [];
+        let tasks = new Map();
 
-        let currentTaskId = null;
-        let statusCheckInterval = null;
-
-        function updateProgress(progress, message) {
-            progressBar.style.width = `${progress}%`;
-            progressPercentage.textContent = `${progress}%`;
-            if (message) {
-                progressText.textContent = message;
+        fileInput.addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                pendingFiles = files;
+                updateSelectedFiles();
+                startButton.style.display = 'inline-block';
             }
-        }
-
-        function resetUI() {
-            progressContainer.style.display = 'none';
-            downloadBtn.style.display = 'none';
-            status.textContent = '';
-            status.classList.remove('error');
-            updateProgress(0, '准备处理...');
-        }
-
-        videoFile.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                fileName.textContent = `已选择: ${file.name}`;
-                uploadBtn.disabled = false;
-                resetUI();
-            } else {
-                fileName.textContent = '';
-                uploadBtn.disabled = true;
-            }
+            fileInput.value = ''; // 清空选择，允许重复选择相同文件
         });
 
-        function checkStatus() {
-            if (!currentTaskId) return;
-            
-            fetch(`/status/${currentTaskId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-                    
-                    updateProgress(data.progress, data.message);
-
-                    if (data.status === 'completed') {
-                        clearInterval(statusCheckInterval);
-                        status.textContent = '处理完成！';
-                        downloadBtn.style.display = 'inline-block';
-                        uploadBtn.disabled = false;
-                    } else if (data.status === 'error') {
-                        clearInterval(statusCheckInterval);
-                        throw new Error(data.message);
-                    }
-                })
-                .catch(error => {
-                    clearInterval(statusCheckInterval);
-                    status.textContent = `错误: ${error.message}`;
-                    status.classList.add('error');
-                    uploadBtn.disabled = false;
-                });
+        function updateSelectedFiles() {
+            selectedFiles.innerHTML = pendingFiles.map(file => `
+                <div class="file-item">
+                    <span class="file-name">${file.name}</span>
+                </div>
+            `).join('');
         }
 
-        function uploadVideo() {
-            const file = videoFile.files[0];
-            if (!file) return;
+        function startProcessing() {
+            pendingFiles.forEach(file => uploadFile(file));
+            pendingFiles = [];
+            updateSelectedFiles();
+            startButton.style.display = 'none';
+        }
 
+        function uploadFile(file) {
             const formData = new FormData();
-            formData.append('video', file);
+            formData.append('file', file);
+            formData.append('keep_audio', keepAudio.checked);
+            if (targetLang.value) {
+                formData.append('target_lang', targetLang.value);
+            }
 
-            uploadBtn.disabled = true;
-            resetUI();
-            progressContainer.style.display = 'block';
-            updateProgress(0, '准备上传...');
+            // 创建任务显示
+            const taskId = 'task_' + Date.now();
+            createTaskItem(taskId, file.name);
 
-            // 创建 XMLHttpRequest 对象来监控上传进度
             const xhr = new XMLHttpRequest();
             
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 20); // 上传占总进度的20%
-                    updateProgress(percentComplete, `正在上传文件... ${percentComplete}%`);
+                    const percentComplete = Math.round((e.loaded / e.total) * 20);
+                    updateTaskProgress(taskId, percentComplete, `正在上传文件... ${percentComplete}%`);
                 }
             };
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-                    currentTaskId = data.task_id;
-                    statusCheckInterval = setInterval(checkStatus, 500);
+                    const response = JSON.parse(xhr.responseText);
+                    tasks.set(response.task_id, taskId);
+                    startPolling(response.task_id);
                 } else {
-                    throw new Error('上传失败');
+                    updateTaskError(taskId, '上传失败');
                 }
             };
 
             xhr.onerror = function() {
-                status.textContent = '上传失败，请重试';
-                status.classList.add('error');
-                uploadBtn.disabled = false;
-                progressContainer.style.display = 'none';
+                updateTaskError(taskId, '上传失败，请重试');
             };
 
             xhr.open('POST', '/upload', true);
             xhr.send(formData);
         }
 
-        function downloadSrt() {
-            if (!currentTaskId) return;
-            window.location.href = `/download/${currentTaskId}`;
+        function createTaskItem(taskId, fileName) {
+            const taskItem = document.createElement('div');
+            taskItem.className = 'task-item';
+            taskItem.id = taskId;
+            taskItem.innerHTML = `
+                <div class="task-header">
+                    <div class="task-title">${fileName}</div>
+                    <div class="task-status">准备上传...</div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar"></div>
+                </div>
+                <button class="upload-btn download-btn" onclick="downloadSrt('${taskId}')" style="display: none;">下载字幕文件</button>
+            `;
+            taskList.insertBefore(taskItem, taskList.firstChild);
         }
+
+        function updateTaskProgress(taskId, progress, message) {
+            const taskItem = document.getElementById(taskId);
+            if (taskItem) {
+                const progressBar = taskItem.querySelector('.progress-bar');
+                const statusText = taskItem.querySelector('.task-status');
+                progressBar.style.width = `${progress}%`;
+                statusText.textContent = message;
+            }
+        }
+
+        function updateTaskError(taskId, error) {
+            const taskItem = document.getElementById(taskId);
+            if (taskItem) {
+                const statusText = taskItem.querySelector('.task-status');
+                statusText.textContent = error;
+                statusText.style.color = '#f44336';
+            }
+        }
+
+        function updateTaskComplete(taskId) {
+            const taskItem = document.getElementById(taskId);
+            if (taskItem) {
+                const downloadBtn = taskItem.querySelector('.download-btn');
+                downloadBtn.style.display = 'inline-block';
+            }
+        }
+
+        function startPolling(serverTaskId) {
+            const pollInterval = setInterval(() => {
+                fetch(`/status/${serverTaskId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        const taskId = tasks.get(serverTaskId);
+                        updateTaskProgress(taskId, data.progress, data.message);
+
+                        if (data.status === 'completed') {
+                            clearInterval(pollInterval);
+                            updateTaskComplete(taskId);
+                        } else if (data.status === 'error') {
+                            clearInterval(pollInterval);
+                            throw new Error(data.message);
+                        }
+                    })
+                    .catch(error => {
+                        const taskId = tasks.get(serverTaskId);
+                        updateTaskError(taskId, error.message);
+                        clearInterval(pollInterval);
+                    });
+            }, 2000);
+        }
+
+        function downloadSrt(taskId) {
+            const serverTaskId = Array.from(tasks.entries())
+                .find(([key, value]) => value === taskId)?.[0];
+            
+            if (serverTaskId) {
+                window.location.href = `/download/${serverTaskId}`;
+            }
+        }
+
+        // 定期清理已完成的任务显示
+        setInterval(() => {
+            const taskItems = document.querySelectorAll('.task-item');
+            if (taskItems.length > 20) {  // 保留最近的20个任务
+                const completedTasks = Array.from(taskItems)
+                    .filter(item => item.querySelector('.download-btn').style.display !== 'none')
+                    .slice(20);
+                completedTasks.forEach(item => item.remove());
+            }
+        }, 60000);  // 每分钟检查一次
     </script>
 </body>
 </html> 

@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 import logging
 import time
 from task_processor import TaskProcessor
+import genSrt
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -11,7 +12,7 @@ app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB 限制
 
 # OpenAI API 配置
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'your_openai_api_key')
-OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.deepseek.com/v1')  # 可选，用于自定义API端点
+OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.deepseek.com/v1')
 
 # 支持的文件类型
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov'}
@@ -30,6 +31,11 @@ task_processor = TaskProcessor(
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/models')
+def get_models():
+    """获取可用的 Whisper 模型列表"""
+    return jsonify(genSrt.get_available_models())
 
 @app.route('/status/<task_id>')
 def get_status(task_id):
@@ -94,6 +100,11 @@ def upload_file():
         # 获取翻译设置
         target_lang = request.form.get('target_lang')
         keep_original = request.form.get('keep_original', 'false').lower() == 'true'
+        model_name = request.form.get('model_name', 'large-v3')
+
+        # 检查模型是否有效
+        if model_name not in genSrt.AVAILABLE_MODELS:
+            return jsonify({'error': f'不支持的模型: {model_name}'}), 400
 
         # 添加任务到处理队列
         task_processor.add_task(
@@ -102,7 +113,8 @@ def upload_file():
             output_dir=app.config['UPLOAD_FOLDER'],
             file_type=file_type,
             target_lang=target_lang,
-            keep_original=keep_original
+            keep_original=keep_original,
+            model_name=model_name
         )
 
         return jsonify({
@@ -116,4 +128,4 @@ def upload_file():
         return jsonify({'error': f'处理失败: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5000) 
+    app.run(debug=True, port=5000) 

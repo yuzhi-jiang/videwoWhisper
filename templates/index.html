@@ -145,6 +145,12 @@
             justify-content: center;
             gap: 10px;
         }
+        .model-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -154,6 +160,13 @@
             <input type="file" id="fileInput" class="file-input" accept=".mp4,.avi,.mkv,.mov,.mp3,.wav,.m4a,.aac,.flac" multiple>
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
             <div class="settings">
+                <div class="settings-group">
+                    <label class="select-label">选择模型</label>
+                    <select id="modelSelect">
+                        <option value="large-v3">加载中...</option>
+                    </select>
+                    <div class="model-description" id="modelDescription"></div>
+                </div>
                 <div class="settings-group">
                     <label class="select-label">翻译目标语言（可选）</label>
                     <select id="targetLang">
@@ -192,6 +205,8 @@
         const taskList = document.getElementById('taskList');
         const targetLang = document.getElementById('targetLang');
         const keepOriginal = document.getElementById('keepOriginal');
+        const modelSelect = document.getElementById('modelSelect');
+        const modelDescription = document.getElementById('modelDescription');
         
         let pendingFiles = [];
         let tasks = new Map();
@@ -225,6 +240,7 @@
             const formData = new FormData();
             formData.append('file', file);
             formData.append('keep_original', keepOriginal.checked);
+            formData.append('model_name', modelSelect.value);
             if (targetLang.value) {
                 formData.append('target_lang', targetLang.value);
             }
@@ -375,6 +391,41 @@
                 completedTasks.forEach(item => item.remove());
             }
         }, 60000);  // 每分钟检查一次
+
+        // 加载可用模型
+        fetch('/models')
+            .then(response => response.json())
+            .then(models => {
+                modelSelect.innerHTML = Object.entries(models)
+                    .map(([key, model]) => `
+                        <option value="${model.name}">${model.name}-${model.description}</option>
+                    `).join('');
+                
+                // 显示第一个模型的描述
+                updateModelDescription(models[modelSelect.value]);
+            })
+            .catch(error => {
+                console.error('加载模型列表失败:', error);
+                modelSelect.innerHTML = '<option value="large-v3">large-v3</option>';
+            });
+
+        // 更新模型描述
+        function updateModelDescription(model) {
+            if (model && model.description) {
+                modelDescription.textContent = model.description;
+            } else {
+                modelDescription.textContent = '';
+            }
+        }
+
+        // 监听模型选择变化
+        modelSelect.addEventListener('change', function() {
+            fetch('/models')
+                .then(response => response.json())
+                .then(models => {
+                    updateModelDescription(models[this.value]);
+                });
+        });
     </script>
 </body>
 </html> 

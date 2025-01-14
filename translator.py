@@ -127,5 +127,3 @@ def test_translate_srt():
     translator = Translator(api_key="your_openai_api_key", api_base="https://api.deepseek.com/v1")
     return translator.translate_srt("uploads/test.srt", "English", keep_original=True)
 
-print(test_translate_srt())
-test

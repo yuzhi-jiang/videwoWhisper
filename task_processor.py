@@ -39,6 +39,7 @@ class TaskProcessor:
         file_type = task['file_type']
         target_lang = task.get('target_lang')
         keep_original = task.get('keep_original', False)
+        model_name = task.get('model_name', 'large-v3')  # 默认使用 large-v3 模型
         filename = os.path.basename(file_path)
         start_time = time.time()
 
@@ -70,10 +71,10 @@ class TaskProcessor:
             self.task_status[task_id].update({
                 'status': 'generating_subtitles',
                 'progress': 30,
-                'message': '正在生成字幕...'
+                'message': f'正在使用 {model_name} 模型生成字幕...'
             })
 
-            genSrt.extract_subtitles(audio_file, output_dir)
+            genSrt.extract_subtitles(audio_file, output_dir, model_name=model_name)
             srt_file = os.path.join(output_dir, genSrt.get_file_name(filename) + '.srt')
 
             # 如果需要翻译（70-90%）
@@ -123,7 +124,7 @@ class TaskProcessor:
             })
             logging.error(f"处理任务 {task_id} 时出错: {str(e)}")
 
-    def add_task(self, task_id, file_path, output_dir, file_type='video', target_lang=None, keep_original=False):
+    def add_task(self, task_id, file_path, output_dir, file_type='video', target_lang=None, keep_original=False, model_name='large-v3'):
         """
         添加任务到队列
         :param task_id: 任务ID
@@ -132,6 +133,7 @@ class TaskProcessor:
         :param file_type: 文件类型 ('video' 或 'audio')
         :param target_lang: 目标翻译语言（可选）
         :param keep_original: 是否保留原文（生成双语字幕）
+        :param model_name: Whisper 模型名称
         """
         self.task_status[task_id] = {
             'status': 'queued',
@@ -145,7 +147,8 @@ class TaskProcessor:
             'output_dir': output_dir,
             'file_type': file_type,
             'target_lang': target_lang,
-            'keep_original': keep_original
+            'keep_original': keep_original,
+            'model_name': model_name
         })
 
     def get_status(self, task_id):

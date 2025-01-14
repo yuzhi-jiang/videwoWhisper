@@ -40,7 +40,7 @@ def extract_subtitles(audio_file, output_dir, language='Chinese', output_format=
     # 加载 whisper 模型
     logging.info(f"正在加载模型 {model_name}...")
 
-    model = whisper.load_model(model_name, device=device)
+    model = whisper.load_model(model_name,download_root='./models', device=device)
     logging.info("模型加载成功。")
     
     # 提取字幕

@@ -5,6 +5,7 @@ import os
 import genSrt
 from translator import Translator
 import concurrent.futures
+import time
 
 class TaskProcessor:
     def __init__(self, openai_api_key, openai_api_base=None, num_workers=2):
@@ -39,6 +40,7 @@ class TaskProcessor:
         target_lang = task.get('target_lang')
         keep_original = task.get('keep_original', False)
         filename = os.path.basename(file_path)
+        start_time = time.time()
 
         try:
             if file_type == 'video':
@@ -99,18 +101,25 @@ class TaskProcessor:
             elif not task.get('keep_audio', False):  # 如果是音频文件且不保留，则删除
                 os.remove(file_path)
 
+            # 计算处理时间
+            process_time = round(time.time() - start_time, 1)
+
             # 更新完成状态
             self.task_status[task_id].update({
                 'status': 'completed',
                 'progress': 100,
-                'message': '处理完成！',
-                'srt_file': srt_file
+                'message': f'处理完成！总耗时: {process_time}秒',
+                'srt_file': srt_file,
+                'process_time': process_time
             })
 
         except Exception as e:
+            # 即使出错也记录处理时间
+            process_time = round(time.time() - start_time, 1)
             self.task_status[task_id].update({
                 'status': 'error',
-                'message': f'处理失败: {str(e)}'
+                'message': f'处理失败: {str(e)}',
+                'process_time': process_time
             })
             logging.error(f"处理任务 {task_id} 时出错: {str(e)}")
 
@@ -128,7 +137,8 @@ class TaskProcessor:
         self.task_status[task_id] = {
             'status': 'queued',
             'progress': 0,
-            'message': '任务已加入队列...'
+            'message': '任务已加入队列...',
+            'start_time': time.time()  # 记录任务创建时间
         }
         self.task_queue.put({
             'task_id': task_id,

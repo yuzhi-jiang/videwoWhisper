@@ -69,6 +69,11 @@
             align-items: center;
             margin-bottom: 10px;
         }
+        .task-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
         .task-title {
             font-weight: bold;
             color: #333;
@@ -76,6 +81,10 @@
         .task-status {
             font-size: 14px;
             color: #666;
+        }
+        .task-time {
+            font-size: 12px;
+            color: #888;
         }
         .progress {
             width: 100%;
@@ -265,8 +274,11 @@
             taskItem.id = taskId;
             taskItem.innerHTML = `
                 <div class="task-header">
-                    <div class="task-title">${fileName}</div>
-                    <div class="task-status">准备上传...</div>
+                    <div class="task-info">
+                        <div class="task-title">${fileName}</div>
+                        <div class="task-status">准备上传...</div>
+                        <div class="task-time"></div>
+                    </div>
                 </div>
                 <div class="progress">
                     <div class="progress-bar"></div>
@@ -281,8 +293,23 @@
             if (taskItem) {
                 const progressBar = taskItem.querySelector('.progress-bar');
                 const statusText = taskItem.querySelector('.task-status');
+                const timeText = taskItem.querySelector('.task-time');
+                
                 progressBar.style.width = `${progress}%`;
                 statusText.textContent = message;
+                
+                // 如果消息中包含处理时间信息，更新时间显示
+                if (message.includes('总耗时:')) {
+                    timeText.textContent = message.split('总耗时:')[1].trim();
+                } else {
+                    // 计算从开始到现在的时间
+                    const startTime = taskItem.dataset.startTime || Date.now();
+                    if (!taskItem.dataset.startTime) {
+                        taskItem.dataset.startTime = startTime;
+                    }
+                    const elapsed = Math.round((Date.now() - startTime) / 1000);
+                    timeText.textContent = `已用时: ${elapsed}秒`;
+                }
             }
         }
 
@@ -290,8 +317,14 @@
             const taskItem = document.getElementById(taskId);
             if (taskItem) {
                 const statusText = taskItem.querySelector('.task-status');
+                const timeText = taskItem.querySelector('.task-time');
                 statusText.textContent = error;
                 statusText.style.color = '#f44336';
+                
+                // 显示总用时
+                const startTime = taskItem.dataset.startTime || Date.now();
+                const elapsed = Math.round((Date.now() - startTime) / 1000);
+                timeText.textContent = `总用时: ${elapsed}秒`;
             }
         }
 

@@ -37,6 +37,7 @@ class TaskProcessor:
         output_dir = task['output_dir']
         file_type = task['file_type']
         target_lang = task.get('target_lang')
+        keep_original = task.get('keep_original', False)
         filename = os.path.basename(file_path)
 
         try:
@@ -78,10 +79,10 @@ class TaskProcessor:
                 self.task_status[task_id].update({
                     'status': 'translating',
                     'progress': 70,
-                    'message': f'正在翻译为{target_lang}...'
+                    'message': f'正在翻译为{target_lang}{"(双语)" if keep_original else ""}...'
                 })
                 
-                translated_file = self.translator.translate_srt(srt_file, target_lang)
+                translated_file = self.translator.translate_srt(srt_file, target_lang, keep_original)
                 srt_file = translated_file  # 更新为翻译后的文件
 
             # 清理临时文件（90-95%）
@@ -113,7 +114,7 @@ class TaskProcessor:
             })
             logging.error(f"处理任务 {task_id} 时出错: {str(e)}")
 
-    def add_task(self, task_id, file_path, output_dir, file_type='video', keep_audio=False, target_lang=None):
+    def add_task(self, task_id, file_path, output_dir, file_type='video', keep_audio=False, target_lang=None, keep_original=False):
         """
         添加任务到队列
         :param task_id: 任务ID
@@ -122,6 +123,7 @@ class TaskProcessor:
         :param file_type: 文件类型 ('video' 或 'audio')
         :param keep_audio: 是否保留音频文件
         :param target_lang: 目标翻译语言（可选）
+        :param keep_original: 是否保留原文（生成双语字幕）
         """
         self.task_status[task_id] = {
             'status': 'queued',
@@ -134,7 +136,8 @@ class TaskProcessor:
             'output_dir': output_dir,
             'file_type': file_type,
             'keep_audio': keep_audio,
-            'target_lang': target_lang
+            'target_lang': target_lang,
+            'keep_original': keep_original
         })
 
     def get_status(self, task_id):

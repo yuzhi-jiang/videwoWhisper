@@ -13,11 +13,12 @@ class Translator:
         self.api_key = api_key
         self.api_base = api_base or "https://api.deepseek.com/v1"
         
-    def translate_srt(self, srt_file, target_lang):
+    def translate_srt(self, srt_file, target_lang, keep_original=False):
         """
         翻译SRT文件
         :param srt_file: SRT文件路径
         :param target_lang: 目标语言
+        :param keep_original: 是否保留原文（生成双语字幕）
         :return: 翻译后的SRT文件路径
         """
         logging.info(f"开始翻译文件: {srt_file} 到 {target_lang}")
@@ -47,11 +48,17 @@ class Translator:
                 logging.info(f"译文: {translated_text}\n")
 
                 # 组合翻译后的块
-                translated_block = f"{index}\n{timestamp}\n{translated_text}"
+                if keep_original:
+                    # 双语字幕：原文在上，译文在下
+                    translated_block = f"{index}\n{timestamp}\n{text}\n{translated_text}"
+                else:
+                    # 仅显示译文
+                    translated_block = f"{index}\n{timestamp}\n{translated_text}"
                 translated_blocks.append(translated_block)
 
             # 保存翻译后的文件
-            output_file = srt_file.rsplit('.', 1)[0] + f'_{target_lang}.srt'
+            suffix = f'_{target_lang}_双语' if keep_original else f'_{target_lang}'
+            output_file = srt_file.rsplit('.', 1)[0] + suffix + '.srt'
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write('\n\n'.join(translated_blocks))
 
@@ -94,7 +101,7 @@ class Translator:
 
         except Exception as e:
             logging.error(f"API调用失败: {str(e)}")
-            raise 
+            raise
 
 def test():
     translator = Translator(api_key="your_openai_api_key", api_base="https://api.deepseek.com/v1")

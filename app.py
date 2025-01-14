@@ -118,4 +118,4 @@ def upload_file():
         return jsonify({'error': f'处理失败: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000) 
+    app.run(debug=False, port=5000) 

@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,10 +13,11 @@ class Translator:
     def __init__(self, api_key, api_base=None):
         self.api_key = api_key
         self.api_base = api_base or "https://api.deepseek.com/v1"
+        self.max_workers = 5  # 设置最大并发数
         
     def translate_srt(self, srt_file, target_lang, keep_original=False):
         """
-        翻译SRT文件
+        翻译SRT文件（并发版本）
         :param srt_file: SRT文件路径
         :param target_lang: 目标语言
         :param keep_original: 是否保留原文（生成双语字幕）
@@ -29,32 +31,43 @@ class Translator:
 
             # 将SRT内容分成块
             blocks = content.strip().split('\n\n')
-            translated_blocks = []
+            translation_tasks = []
+            
+            # 创建线程池
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                # 提交翻译任务
+                for block in blocks:
+                    lines = block.split('\n')
+                    if len(lines) < 3:
+                        continue
+                    
+                    index = lines[0]
+                    timestamp = lines[1]
+                    text = '\n'.join(lines[2:])
+                    
+                    logging.info(f"提交翻译任务 {index}:")
+                    logging.info(f"原文: {text}")
+                    
+                    # 将任务提交到线程池
+                    future = executor.submit(self._translate_text, text, target_lang)
+                    translation_tasks.append((index, timestamp, text, future))
 
-            for block in blocks:
-                lines = block.split('\n')
-                if len(lines) < 3:
-                    continue
-                
-                # 分离时间戳和文本
-                index = lines[0]
-                timestamp = lines[1]
-                text = '\n'.join(lines[2:])
-
-                logging.info(f"正在翻译字幕块 {index}:")
-                logging.info(f"原文: {text}")
-                # 翻译文本
-                translated_text = self._translate_text(text, target_lang)
-                logging.info(f"译文: {translated_text}\n")
-
-                # 组合翻译后的块
-                if keep_original:
-                    # 双语字幕：原文在上，译文在下
-                    translated_block = f"{index}\n{timestamp}\n{text}\n{translated_text}"
-                else:
-                    # 仅显示译文
-                    translated_block = f"{index}\n{timestamp}\n{translated_text}"
-                translated_blocks.append(translated_block)
+                # 收集翻译结果
+                translated_blocks = []
+                for index, timestamp, text, future in translation_tasks:
+                    try:
+                        translated_text = future.result()
+                        logging.info(f"翻译完成 {index}:")
+                        logging.info(f"译文: {translated_text}\n")
+                        
+                        if keep_original:
+                            translated_block = f"{index}\n{timestamp}\n{text}\n{translated_text}"
+                        else:
+                            translated_block = f"{index}\n{timestamp}\n{translated_text}"
+                        translated_blocks.append(translated_block)
+                    except Exception as e:
+                        logging.error(f"翻译块 {index} 失败: {str(e)}")
+                        raise
 
             # 保存翻译后的文件
             suffix = f'_{target_lang}_双语' if keep_original else f'_{target_lang}'
@@ -72,7 +85,7 @@ class Translator:
         """
         调用DeepSeek API翻译文本
         """
-        logging.info(f"调用API翻译文本: {text}")
+        # logging.info(f"调用API翻译文本: {text}")
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -109,3 +122,10 @@ def test():
     print(result)
 
 # test()
+
+def test_translate_srt():
+    translator = Translator(api_key="your_openai_api_key", api_base="https://api.deepseek.com/v1")
+    return translator.translate_srt("uploads/test.srt", "English", keep_original=True)
+
+print(test_translate_srt())
+test

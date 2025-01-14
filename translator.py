@@ -44,10 +44,10 @@ class Translator:
                     index = lines[0]
                     timestamp = lines[1]
                     text = '\n'.join(lines[2:])
-                    
+
                     logging.info(f"提交翻译任务 {index}:")
                     logging.info(f"原文: {text}")
-                    
+
                     # 将任务提交到线程池
                     future = executor.submit(self._translate_text, text, target_lang)
                     translation_tasks.append((index, timestamp, text, future))
@@ -96,7 +96,8 @@ class Translator:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "你是一个专业的翻译助手，请直接提供翻译结果，不要添加任何解释或额外的文本。"},
+                {"role": "system",
+                 "content": "你是一个专业的翻译助手，请直接提供翻译结果，不要添加任何解释或额外的文本。"},
                 {"role": "user", "content": prompt}
             ]
         }

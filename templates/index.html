@@ -151,6 +151,24 @@
             margin-top: 5px;
             font-style: italic;
         }
+        .queue-info {
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+            color: #666;
+        }
+        .queue-info span {
+            font-weight: bold;
+            color: #333;
+        }
+        .queue-warning {
+            color: #f44336;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -159,6 +177,10 @@
         <div class="upload-form">
             <input type="file" id="fileInput" class="file-input" accept=".mp4,.avi,.mkv,.mov,.mp3,.wav,.m4a,.aac,.flac" multiple>
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
+            <div class="queue-info" id="queueInfo">
+                正在加载队列信息...
+            </div>
+            <div class="queue-warning" id="queueWarning"></div>
             <div class="settings">
                 <div class="settings-group">
                     <label class="select-label">选择模型</label>
@@ -207,6 +229,9 @@
         const keepOriginal = document.getElementById('keepOriginal');
         const modelSelect = document.getElementById('modelSelect');
         const modelDescription = document.getElementById('modelDescription');
+        const queueInfo = document.getElementById('queueInfo');
+        const queueWarning = document.getElementById('queueWarning');
+        let queueUpdateInterval;
         
         let pendingFiles = [];
         let tasks = new Map();
@@ -286,6 +311,7 @@
                         <div class="task-title">${fileName}</div>
                         <div class="task-status">准备上传...</div>
                         <div class="task-time"></div>
+                        <div class="queue-position"></div>
                     </div>
                 </div>
                 <div class="progress">
@@ -296,15 +322,23 @@
             taskList.insertBefore(taskItem, taskList.firstChild);
         }
 
-        function updateTaskProgress(taskId, progress, message) {
+        function updateTaskProgress(taskId, progress, message, data) {
             const taskItem = document.getElementById(taskId);
             if (taskItem) {
                 const progressBar = taskItem.querySelector('.progress-bar');
                 const statusText = taskItem.querySelector('.task-status');
                 const timeText = taskItem.querySelector('.task-time');
+                const queuePosition = taskItem.querySelector('.queue-position');
                 
                 progressBar.style.width = `${progress}%`;
                 statusText.textContent = message;
+
+                // 显示队列位置
+                if (data && data.queue_position) {
+                    queuePosition.textContent = `队列位置: ${data.queue_position}`;
+                } else {
+                    queuePosition.textContent = '';
+                }
                 
                 // 如果消息中包含处理时间信息，更新时间显示
                 if (message.includes('总耗时:')) {
@@ -354,7 +388,7 @@
                         }
                         
                         const taskId = tasks.get(serverTaskId);
-                        updateTaskProgress(taskId, data.progress, data.message);
+                        updateTaskProgress(taskId, data.progress, data.message, data);
 
                         if (data.status === 'completed') {
                             clearInterval(pollInterval);
@@ -426,6 +460,38 @@
                     updateModelDescription(models[this.value]);
                 });
         });
+
+        // 更新队列信息
+        function updateQueueInfo() {
+            fetch('/queue/info')
+                .then(response => response.json())
+                .then(data => {
+                    queueInfo.innerHTML = `当前活动任务: <span>${data.active_tasks}</span> / <span>${data.max_tasks}</span>，队列中等待: <span>${data.queued_tasks}</span>`;
+                    
+                    // 如果队列已满，显示警告
+                    if (data.active_tasks + data.queued_tasks >= data.max_tasks) {
+                        queueWarning.textContent = `队列已满（最大${data.max_tasks}个任务），请等待其他任务完成后再添加`;
+                        queueWarning.style.display = 'block';
+                        startButton.disabled = true;
+                    } else {
+                        queueWarning.style.display = 'none';
+                        startButton.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('获取队列信息失败:', error);
+                    queueInfo.textContent = '获取队列信息失败';
+                });
+        }
+
+        // 开始定期更新队列信息
+        function startQueueUpdates() {
+            updateQueueInfo();
+            queueUpdateInterval = setInterval(updateQueueInfo, 2000);
+        }
+
+        // 页面加载时开始更新队列信息
+        startQueueUpdates();
     </script>
 </body>
 </html> 

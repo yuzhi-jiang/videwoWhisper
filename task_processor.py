@@ -14,6 +14,9 @@ class TaskProcessor:
         self.num_workers = num_workers
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_workers)
         self.translator = Translator(openai_api_key, openai_api_base)
+        self.active_tasks = 0  # 当前活动任务数
+        self.max_active_tasks = 5  # 最大活动任务数
+        self.task_lock = threading.Lock()  # 用于同步任务计数
         self._start_workers()
 
     def _start_workers(self):
@@ -26,11 +29,35 @@ class TaskProcessor:
                 task = self.task_queue.get()
                 if task is None:
                     break
+
+                with self.task_lock:
+                    self.active_tasks += 1
+                    self.task_status[task['task_id']].update({
+                        'status': 'processing',
+                        'queue_position': None  # 移出队列
+                    })
+
                 self._process_task(task)
+
+                with self.task_lock:
+                    self.active_tasks -= 1
+                    # 更新队列中任务的位置
+                    self._update_queue_positions()
+
             except Exception as e:
                 logging.error(f"处理任务时出错: {str(e)}")
+                with self.task_lock:
+                    self.active_tasks -= 1
             finally:
                 self.task_queue.task_done()
+
+    def _update_queue_positions(self):
+        """更新队列中等待任务的位置"""
+        queue_position = 1
+        for task_id, status in self.task_status.items():
+            if status['status'] == 'queued':
+                status.update({'queue_position': queue_position})
+                queue_position += 1
 
     def _process_task(self, task):
         task_id = task['task_id']
@@ -127,20 +154,25 @@ class TaskProcessor:
     def add_task(self, task_id, file_path, output_dir, file_type='video', target_lang=None, keep_original=False, model_name='large-v3'):
         """
         添加任务到队列
-        :param task_id: 任务ID
-        :param file_path: 文件路径
-        :param output_dir: 输出目录
-        :param file_type: 文件类型 ('video' 或 'audio')
-        :param target_lang: 目标翻译语言（可选）
-        :param keep_original: 是否保留原文（生成双语字幕）
-        :param model_name: Whisper 模型名称
+        :return: (bool, str) - (是否成功添加, 消息)
         """
-        self.task_status[task_id] = {
-            'status': 'queued',
-            'progress': 0,
-            'message': '任务已加入队列...',
-            'start_time': time.time()  # 记录任务创建时间
-        }
+        with self.task_lock:
+            # 计算当前总任务数（活动 + 队列中）
+            total_tasks = self.active_tasks + sum(1 for status in self.task_status.values() 
+                                                if status['status'] == 'queued')
+            
+            if total_tasks >= self.max_active_tasks:
+                return False, f"任务队列已满（最大{self.max_active_tasks}个任务），请等待其他任务完成后再试"
+
+            queue_position = total_tasks + 1
+            self.task_status[task_id] = {
+                'status': 'queued',
+                'progress': 0,
+                'message': '任务已加入队列...',
+                'start_time': time.time(),
+                'queue_position': queue_position
+            }
+
         self.task_queue.put({
             'task_id': task_id,
             'file_path': file_path,
@@ -151,9 +183,20 @@ class TaskProcessor:
             'model_name': model_name
         })
 
+        return True, f"任务已添加到队列，位置：{queue_position}"
+
     def get_status(self, task_id):
         return self.task_status.get(task_id)
 
     def get_all_status(self):
         """获取所有任务的状态"""
-        return self.task_status 
+        return self.task_status
+
+    def get_queue_info(self):
+        """获取队列信息"""
+        return {
+            'active_tasks': self.active_tasks,
+            'max_tasks': self.max_active_tasks,
+            'queued_tasks': sum(1 for status in self.task_status.values() 
+                              if status['status'] == 'queued')
+        } 

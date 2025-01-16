@@ -8,7 +8,7 @@ import genSrt
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB 限制
+app.config['MAX_CONTENT_LENGTH'] = 2*1024 * 1024 * 1024  # 1GB 限制
 
 # OpenAI API 配置
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'your_openai_api_key')
@@ -74,6 +74,11 @@ def get_file_type(filename):
         return 'audio'
     return None
 
+@app.route('/queue/info')
+def get_queue_info():
+    """获取队列信息"""
+    return jsonify(task_processor.get_queue_info())
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -107,7 +112,7 @@ def upload_file():
             return jsonify({'error': f'不支持的模型: {model_name}'}), 400
 
         # 添加任务到处理队列
-        task_processor.add_task(
+        success, message = task_processor.add_task(
             task_id=task_id,
             file_path=file_path,
             output_dir=app.config['UPLOAD_FOLDER'],
@@ -117,9 +122,14 @@ def upload_file():
             model_name=model_name
         )
 
+        if not success:
+            # 如果添加失败，删除上传的文件
+            os.remove(file_path)
+            return jsonify({'error': message}), 400
+
         return jsonify({
             'task_id': task_id,
-            'message': '任务已添加到队列',
+            'message': message,
             'file_type': file_type
         })
 

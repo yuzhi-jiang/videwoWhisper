@@ -4,16 +4,19 @@ import logging
 import os
 import genSrt
 from translator import Translator
+from subtitle_corrector import SubtitleCorrector
+from config_manager import ConfigManager
 import concurrent.futures
 import time
 
 class TaskProcessor:
-    def __init__(self, openai_api_key, openai_api_base=None, num_workers=2):
+    def __init__(self, num_workers=2):
         self.task_queue = queue.Queue()
         self.task_status = {}
         self.num_workers = num_workers
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_workers)
-        self.translator = Translator(openai_api_key, openai_api_base)
+        self.translator = Translator()
+        self.corrector = SubtitleCorrector()
         self.active_tasks = 0  # 当前活动任务数
         self.max_active_tasks = 5  # 最大活动任务数
         self.task_lock = threading.Lock()  # 用于同步任务计数
@@ -66,7 +69,7 @@ class TaskProcessor:
         file_type = task['file_type']
         target_lang = task.get('target_lang')
         keep_original = task.get('keep_original', False)
-        model_name = task.get('model_name', 'large-v3')  # 默认使用 large-v3 模型
+        model_name = task.get('model_name')
         filename = os.path.basename(file_path)
         start_time = time.time()
 
@@ -94,7 +97,7 @@ class TaskProcessor:
                     'message': '开始处理音频...'
                 })
 
-            # 生成字幕（20-70%）
+            # 生成字幕（20-40%）
             self.task_status[task_id].update({
                 'status': 'generating_subtitles',
                 'progress': 30,
@@ -104,7 +107,22 @@ class TaskProcessor:
             genSrt.extract_subtitles(audio_file, output_dir, model_name=model_name)
             srt_file = os.path.join(output_dir, genSrt.get_file_name(filename) + '.srt')
 
-            # 如果需要翻译（70-90%）
+            # 纠正字幕（40-60%）
+            self.task_status[task_id].update({
+                'status': 'correcting_subtitles',
+                'progress': 40,
+                'message': '正在纠正字幕...'
+            })
+
+            config = ConfigManager().get_config('subtitle_correction')
+            if config.get('enabled', True):
+                srt_file = self.corrector.correct_srt(srt_file)
+                self.task_status[task_id].update({
+                    'progress': 60,
+                    'message': '字幕纠正完成...'
+                })
+
+            # 如果需要翻译（60-90%）
             if target_lang:
                 self.task_status[task_id].update({
                     'status': 'translating',

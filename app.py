@@ -33,8 +33,6 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # 创建任务处理器
 task_processor = TaskProcessor(
-    openai_api_key=OPENAI_API_KEY,
-    openai_api_base=OPENAI_API_BASE,
     num_workers=config_manager.get_translation_config().get('max_workers', 2)
 )
 
@@ -124,7 +122,7 @@ def upload_file():
         # 获取翻译设置
         target_lang = request.form.get('target_lang')
         keep_original = request.form.get('keep_original', 'false').lower() == 'true'
-        model_name = request.form.get('model_name', 'large-v3')
+        model_name = request.form.get('model_name')
 
         # 检查模型是否有效
         if model_name not in genSrt.AVAILABLE_MODELS:

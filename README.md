@@ -46,7 +46,7 @@ pip install -r requirements.txt
         "openai_api_base": "https://api.deepseek.com/v1"
     },
     "translation": {
-        "default_model": "deepseek-chat",
+        "default_model": "deepseek-reasoner",
         "context_window": 3,
         "max_workers": 5
     },

@@ -1,12 +1,20 @@
 {
     "api": {
         "openai_api_key": "your_api_key_here",
-        "openai_api_base": "https://api.deepseek.com/v1"
+        "openai_api_base": "https://api.deepseek.com",
+        "default_model": "deepseek-chat"
     },
     "translation": {
         "default_model": "deepseek-chat",
         "context_window": 3,
         "max_workers": 5
+    },
+    "subtitle_correction": {
+        "enabled": true,
+        "context_window": 3,
+        "batch_size": 5,
+        "model": "deepseek-chat",
+        "max_workers": 25
     },
     "word_dict": {
         "path": "word_dict.txt",

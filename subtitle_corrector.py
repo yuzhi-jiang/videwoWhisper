@@ -6,54 +6,21 @@ import concurrent.futures
 from config_manager import ConfigManager
 from ai_service import AIService
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-class Translator:
+class SubtitleCorrector:
     def __init__(self):
-        config = ConfigManager().get_config('translation')
-        self.max_workers = config.get('max_workers', 5)
+        config = ConfigManager().get_config('subtitle_correction')
         self.context_window = config.get('context_window', 3)
         self.batch_size = config.get('batch_size', 10)
+        self.max_workers = config.get('max_workers', 3)
         self.ai_service = AIService()
-        self.word_dict = {}  # 初始化替换词典
-        
-    def set_word_dict(self, dict_path):
-        """
-        设置替换词典
-        :param dict_path: 词典文件路径，格式为每行: 原文->替换文
-        """
-        try:
-            with open(dict_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if '->' in line:
-                        source, target = line.split('->', 1)
-                        self.word_dict[source.strip()] = target.strip()
-            logging.info(f"成功加载词典，共 {len(self.word_dict)} 个替换规则")
-        except Exception as e:
-            logging.error(f"加载词典失败: {str(e)}")
-            raise
 
-    def apply_word_dict(self, text):
+    def correct_srt(self, srt_file: str) -> str:
         """
-        应用词典替换
-        """
-        for source, target in self.word_dict.items():
-            text = text.replace(source, target)
-        return text
-
-    def translate_srt(self, srt_file: str, target_lang: str, keep_original: bool = False) -> str:
-        """
-        翻译SRT文件
+        纠正SRT文件中的识别错误（多线程版本）
         :param srt_file: SRT文件路径
-        :param target_lang: 目标语言
-        :param keep_original: 是否保留原文（生成双语字幕）
-        :return: 翻译后的SRT文件路径
+        :return: 纠正后的SRT文件路径
         """
-        logging.info(f"开始翻译文件: {srt_file} 到 {target_lang}")
+        logging.info(f"开始纠正字幕文件: {srt_file}")
         try:
             # 读取SRT文件
             with open(srt_file, 'r', encoding='utf-8') as f:
@@ -69,13 +36,15 @@ class Translator:
                 batch_info = self._prepare_batch(batch, i, blocks)
                 if batch_info:
                     batches.append(batch_info)
+            
+            print(f"总批次数: {len(batches)}")
 
             # 使用线程池并行处理批次
-            translated_blocks = []
+            corrected_blocks = []
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # 提交所有批次的处理任务
                 future_to_batch = {
-                    executor.submit(self._process_batch, batch, target_lang, keep_original): i 
+                    executor.submit(self._process_batch, batch): i 
                     for i, batch in enumerate(batches)
                 }
 
@@ -93,19 +62,18 @@ class Translator:
                 # 按原始顺序排序结果
                 all_results.sort(key=lambda x: x[0])
                 for _, batch_blocks in all_results:
-                    translated_blocks.extend(batch_blocks)
+                    corrected_blocks.extend(batch_blocks)
 
-            # 保存翻译后的文件
-            suffix = f'_{target_lang}_双语' if keep_original else f'_{target_lang}'
-            output_file = srt_file.rsplit('.', 1)[0] + suffix + '.srt'
+            # 保存纠正后的文件
+            output_file = srt_file.rsplit('.', 1)[0] + '_corrected.srt'
             with open(output_file, 'w', encoding='utf-8') as f:
-                f.write('\n\n'.join(translated_blocks))
+                f.write('\n\n'.join(corrected_blocks))
 
-            logging.info(f"翻译完成，保存到: {output_file}")
+            logging.info(f"字幕纠正完成，保存到: {output_file}")
             return output_file
 
         except Exception as e:
-            logging.error(f"翻译过程中出错: {str(e)}")
+            logging.error(f"字幕纠正过程中出错: {str(e)}")
             raise
 
     def _prepare_batch(self, batch: List[str], batch_start_index: int, all_blocks: List[str]) -> List[Dict]:
@@ -150,50 +118,53 @@ class Translator:
         
         return batch_blocks
 
-    def _process_batch(self, batch_blocks: List[Dict], target_lang: str, keep_original: bool) -> List[str]:
+    def _process_batch(self, batch_blocks: List[Dict]) -> List[str]:
         """
         处理单个批次
         """
+       
+        # 打印当前批次中的所有字幕序号
+        print("当前批次字幕序号:")
+        print("size:",len(batch_blocks))
+        for block in batch_blocks:
+            print(f"字幕序号: {block['index']}")
         try:
-            # 获取翻译文本
+            # 获取纠正后的文本
             texts = [block['text'] for block in batch_blocks]
             contexts_before = [block['context_before'] for block in batch_blocks]
             contexts_after = [block['context_after'] for block in batch_blocks]
+            indexs = [block['index'] for block in batch_blocks]
 
-            translated_texts = []
-            for text, ctx_before, ctx_after in zip(texts, contexts_before, contexts_after):
-                translated_text = self.ai_service.translate_text(text, target_lang, ctx_before, ctx_after)
-                translated_text = self.apply_word_dict(translated_text)
-                translated_texts.append(translated_text)
+            corrected_texts = []
+            for text, ctx_before, ctx_after,index in zip(texts, contexts_before, contexts_after,indexs):
+                corrected_text = self.ai_service.correct_subtitles(text, ctx_before, ctx_after)
+                print(f"字幕序号: {index} 完成纠错")
+                corrected_texts.append(corrected_text)
             
             # 重建字幕块
-            translated_blocks = []
-            for block_info, translated_text in zip(batch_blocks, translated_texts):
-                if keep_original:
-                    translated_block = (
-                        f"{block_info['index']}\n"
-                        f"{block_info['timestamp']}\n"
-                        f"{block_info['text']}\n{translated_text}"
-                    )
-                else:
-                    translated_block = (
-                        f"{block_info['index']}\n"
-                        f"{block_info['timestamp']}\n"
-                        f"{translated_text}"
-                    )
-                translated_blocks.append(translated_block)
+            corrected_blocks = []
+            for block_info, corrected_text in zip(batch_blocks, corrected_texts):
+                corrected_block = (
+                    f"{block_info['index']}\n"
+                    f"{block_info['timestamp']}\n"
+                    f"{corrected_text}"
+                )
+                corrected_blocks.append(corrected_block)
             
-            return translated_blocks
+            return corrected_blocks
 
         except Exception as e:
             logging.error(f"处理批次时出错: {str(e)}")
             raise
 
 def test():
-    translator = Translator()
-    translator.set_word_dict('word_dict.txt')
-    translated_file = translator.translate_srt("uploads/test.srt", "英语", keep_original=True)
-    print(f"翻译后的文件: {translated_file}")
+    corrector = SubtitleCorrector()
+    import time
+    start_time = time.time()
+    corrected_file = corrector.correct_srt("uploads/test.srt")
+    end_time = time.time()
+    print(f"字幕纠错耗时: {end_time - start_time:.2f} 秒")
+    print(f"纠正后的文件: {corrected_file}")
 
 if __name__ == "__main__":
-    test()
+    test() 

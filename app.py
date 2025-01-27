@@ -5,14 +5,24 @@ import logging
 import time
 from task_processor import TaskProcessor
 import genSrt
+from config_manager import ConfigManager
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 2*1024 * 1024 * 1024  # 1GB 限制
+app.config['MAX_CONTENT_LENGTH'] = 2*1024 * 1024 * 1024  # 2GB 限制
+
+# 获取配置管理器实例
+config_manager = ConfigManager()
 
 # OpenAI API 配置
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'your_openai_api_key')
-OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.deepseek.com/v1')
+OPENAI_API_KEY = config_manager.get_api_key()
+OPENAI_API_BASE = config_manager.get_api_base()
+
+# 检查API配置
+if not OPENAI_API_KEY or not OPENAI_API_BASE:
+    error_msg = "请在环境变量或config.json中配置OPENAI_API_KEY和OPENAI_API_BASE"
+    logging.error(error_msg)
+    raise ValueError(error_msg)
 
 # 支持的文件类型
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov'}
@@ -25,8 +35,17 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 task_processor = TaskProcessor(
     openai_api_key=OPENAI_API_KEY,
     openai_api_base=OPENAI_API_BASE,
-    num_workers=2
+    num_workers=config_manager.get_translation_config().get('max_workers', 2)
 )
+
+# 如果启用了词典，加载词典
+word_dict_config = config_manager.get_word_dict_config()
+if word_dict_config.get('enabled', True):
+    dict_path = word_dict_config.get('path', 'word_dict.txt')
+    if os.path.exists(dict_path):
+        task_processor.translator.set_word_dict(dict_path)
+    else:
+        logging.warning(f"词典文件 {dict_path} 不存在")
 
 @app.route('/')
 def index():

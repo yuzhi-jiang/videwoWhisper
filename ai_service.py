@@ -31,6 +31,7 @@ class AIService:
         :param context_after: 后文上下文
         :return: 纠正后的文本
         """
+        errResponse = None
         try:
             # 构建上下文提示
             context_prompt = ""
@@ -47,22 +48,25 @@ class AIService:
             请只返回纠正后的文本，不要包含任何解释或额外的文本。如果文本已经正确，直接返回原文。"""
             
             response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "你是一个专业的语音识别后处理助手。你的任务是纠正语音识别的错误，确保文本通顺、准确，并与上下文保持一致。只返回纠正后的文本，不要添加任何解释。"
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                stream=False
-            )
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "你是一个专业的语音识别后处理助手。你的任务是纠正语音识别的错误，确保文本通顺、准确，并与上下文保持一致。只返回纠正后的文本，不要添加任何解释。"
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=False
+                )
+            errResponse=response
             if response.choices[0].message.content.strip() != text:
                 print(f"需要纠正的文本: {text}")
                 print(f"纠正后的文本: {response.choices[0].message.content.strip()}")
-
+                
             return response.choices[0].message.content.strip()
         except json.JSONDecodeError as e:
+            logging.info(f"原文本: {text}")
+            logging.info(f"response: {errResponse}")
             logging.error(f"JSON解析错误: {e}")
             # 发生错误时返回原文本
             return text
@@ -79,6 +83,7 @@ class AIService:
         :param context_after: 后文上下文
         :return: 翻译后的文本
         """
+        errResponse = None
         try:
             # 构建上下文提示
             context_prompt = ""
@@ -105,9 +110,14 @@ class AIService:
                 ],
                 stream=False
             )
-
+            errResponse=response
             return response.choices[0].message.content.strip()
-
+        except json.JSONDecodeError as e:
+            logging.info(f"原文本: {text}")
+            logging.info(f"response: {errResponse}")
+            logging.error(f"JSON解析错误: {e}")
+            # 发生错误时返回原文本
+            return text
         except Exception as e:
             logging.error(f"文本翻译失败: {str(e)}")
             raise

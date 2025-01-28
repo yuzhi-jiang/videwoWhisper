@@ -3,3 +3,4 @@ venv/
 uploads
 .idea
 models/
+tasks.db

@@ -5,6 +5,7 @@ import os
 import genSrt
 from translator import Translator
 from subtitle_corrector import SubtitleCorrector
+from subtitle_processor import SubtitleProcessor
 from config_manager import ConfigManager
 import concurrent.futures
 import time
@@ -26,6 +27,8 @@ class TaskProcessor:
         self.db = Database()
         
         # 初始化其他组件
+        config = ConfigManager().get_config('subtitle_correction')
+        self.processor = SubtitleProcessor(config)  # 添加处理器实例
         self.corrector = SubtitleCorrector()
         self.translator = Translator()
         
@@ -119,18 +122,19 @@ class TaskProcessor:
                 # 生成临时音频文件名
                 audio_filename = f"temp_audio_{task_id}.mp3"
                 audio_file = os.path.join(output_dir, audio_filename)
-                genSrt.extract_audio(file_path, audio_file)
+                if not os.path.exists(audio_file):
+                    genSrt.extract_audio(file_path, audio_file)
                 
-                # 记录临时音频文件
-                self.db.add_file(
-                    file_id=str(uuid.uuid4()),
-                    task_id=task_id,
-                    file_type='audio',
-                    original_filename=audio_filename,
-                    stored_filename=audio_filename,
-                    file_path=audio_file,
-                    is_temporary=True
-                )
+                    # 记录临时音频文件
+                    self.db.add_file(
+                        file_id=str(uuid.uuid4()),
+                        task_id=task_id,
+                        file_type='audio',
+                        original_filename=audio_filename,
+                        stored_filename=audio_filename,
+                        file_path=audio_file,
+                        is_temporary=True
+                    )
                 
                 self.db.update_task_status(task_id, 'extracting_audio', 20, '音频提取完成...')
             else:
@@ -171,28 +175,16 @@ class TaskProcessor:
                 is_temporary=False
             )
 
-            # 纠正字幕（40-60%）
-            self.db.update_task_status(task_id, 'correcting_subtitles', 40, '正在纠正字幕...')
-
+            # 构建处理器列表
+            processors = []
             config = ConfigManager().get_config('subtitle_correction')
+            
+            # 如果启用了纠错，添加纠错处理器
             if config.get('enabled', True):
-                corrected_srt = self.corrector.correct_srt(srt_file)
-                if corrected_srt != srt_file:
-                    # 如果生成了新的纠正文件，更新文件记录
-                    self.db.add_file(
-                        file_id=str(uuid.uuid4()),
-                        task_id=task_id,
-                        file_type='subtitle_corrected',
-                        original_filename=srt_filename,
-                        stored_filename=os.path.basename(corrected_srt),
-                        file_path=corrected_srt,
-                        is_temporary=False
-                    )
-                    srt_file = corrected_srt
-
-                self.db.update_task_status(task_id, 'correcting_subtitles', 60, '字幕纠正完成...')
-
-            # 如果需要翻译（60-90%）
+                self.db.update_task_status(task_id, 'correcting_subtitles', 40, '正在纠正字幕...')
+                processors.append((self.corrector.correct_text, {}))
+            
+            # 如果需要翻译，添加翻译处理器
             if target_lang:
                 self.db.update_task_status(
                     task_id,
@@ -200,20 +192,28 @@ class TaskProcessor:
                     70,
                     f'正在翻译为{target_lang}{"(双语)" if keep_original else ""}...'
                 )
+                processors.append((self.translator.translate_text, {'target_lang': target_lang}))
+            
+            # 如果有处理器，执行处理流水线
+            if processors:
+                processed_file = self.processor.process_srt_pipeline(
+                    srt_file=srt_file,
+                    processors=processors,
+                    keep_original=keep_original
+                )
                 
-                translated_file = self.translator.translate_srt(srt_file, target_lang, keep_original)
-                if translated_file != srt_file:
-                    # 记录翻译后的文件
+                if processed_file != srt_file:
+                    # 记录处理后的文件
                     self.db.add_file(
                         file_id=str(uuid.uuid4()),
                         task_id=task_id,
-                        file_type='subtitle_translated',
+                        file_type='subtitle_processed',
                         original_filename=srt_filename,
-                        stored_filename=os.path.basename(translated_file),
-                        file_path=translated_file,
+                        stored_filename=os.path.basename(processed_file),
+                        file_path=processed_file,
                         is_temporary=False
                     )
-                    srt_file = translated_file
+                    srt_file = processed_file
 
             # 清理临时文件（90-95%）
             self.db.update_task_status(task_id, 'cleaning', 90, '正在清理临时文件...')

@@ -68,18 +68,35 @@ def get_all_status():
 
 @app.route('/download/<task_id>')
 def download_file(task_id):
-    status = task_processor.get_status(task_id)
-    if not status or status['status'] != 'completed':
+    task = task_processor.get_status(task_id)
+    if not task or task['status'] != 'completed':
         return jsonify({'error': '文件不存在或任务未完成'}), 404
     
-    srt_file = status['srt_file']
-    if not os.path.exists(srt_file):
+    # 获取任务的所有文件
+    files = task_processor.db.get_task_files(task_id)
+    if not files:
+        return jsonify({'error': '找不到任务相关的文件'}), 404
+    
+    # 获取最终的字幕文件（优先使用翻译后的文件，其次是纠正后的文件，最后是原始字幕文件）
+    subtitle_file = None
+    for file_type in ['subtitle_translated', 'subtitle_corrected', 'subtitle']:
+        for file in files:
+            if file['file_type'] == file_type:
+                subtitle_file = file
+                break
+        if subtitle_file:
+            break
+    
+    if not subtitle_file or not os.path.exists(subtitle_file['file_path']):
         return jsonify({'error': '字幕文件不存在'}), 404
     
+    # 使用原始文件名作为下载文件名
+    download_name = subtitle_file['original_filename']
+    
     return send_file(
-        srt_file,
+        subtitle_file['file_path'],
         as_attachment=True,
-        download_name=os.path.basename(srt_file)
+        download_name=download_name
     )
 
 def get_file_type(filename):

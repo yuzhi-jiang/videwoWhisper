@@ -2,6 +2,7 @@ import ffmpeg
 import whisper
 import logging
 import whisper.utils
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -23,7 +24,7 @@ def extract_audio(video_file, output_audio_file):
     # 使用 ffmpeg 提取音频
     ffmpeg.input(video_file).output(output_audio_file, q=0, map='a').run()
 
-def extract_subtitles(audio_file, output_dir, language='Chinese', output_format="srt", device=None, model_name='large-v3-turbo'):
+def extract_subtitles(audio_file, output_dir, language='Chinese', output_format="srt", device=None, model_name='large-v3-turbo', output_filename=None):
     """
     提取字幕
     :param audio_file: 音频文件路径
@@ -32,6 +33,8 @@ def extract_subtitles(audio_file, output_dir, language='Chinese', output_format=
     :param output_format: 输出格式
     :param device: 设备（cuda/cpu）
     :param model_name: 模型名称
+    :param output_filename: 指定的输出文件名（不包含路径）
+    :return: 生成的字幕文件完整路径
     """
     # 检查模型是否支持
     if model_name not in AVAILABLE_MODELS:
@@ -40,7 +43,7 @@ def extract_subtitles(audio_file, output_dir, language='Chinese', output_format=
     # 加载 whisper 模型
     logging.info(f"正在加载模型 {model_name}...")
 
-    model = whisper.load_model(model_name,download_root='./models', device=device)
+    model = whisper.load_model(model_name, download_root='./models', device=device)
     logging.info("模型加载成功。")
     
     # 提取字幕
@@ -55,9 +58,20 @@ def extract_subtitles(audio_file, output_dir, language='Chinese', output_format=
     result = model.transcribe(audio_file, **transcribe_options)
     logging.info("转录完成。")
 
-    file_name = get_file_name(audio_file)
+    # 使用指定的文件名或生成默认文件名
+    if output_filename:
+        base_name = os.path.splitext(output_filename)[0]
+    else:
+        base_name = get_file_name(audio_file)
+
+    # 生成完整的输出文件路径
+    output_path = os.path.join(output_dir, f"{base_name}.{output_format}")
+    
+    # 使用whisper的writer保存文件
     writer = whisper.utils.get_writer(output_format, output_dir)
-    writer(result, file_name)
+    writer(result, base_name)
+
+    return output_path
 
 def get_file_name(file_path):
     return file_path.split('/')[-1].split('.')[0]
@@ -67,9 +81,7 @@ video_file = 'a.mp4'          # 输入视频文件
 output_audio_file = get_file_name(video_file)+'.mp3'   # 输出音频文件
 output_dir = '.'              # 字幕输出目录
 
-
 # 删除临时音频文件
-import os
 def genSrt(video_file, output_audio_file, output_dir):
     # 提取音频
     extract_audio(video_file, output_audio_file)

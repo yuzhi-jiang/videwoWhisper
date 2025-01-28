@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List, Optional
 from openai import OpenAI
@@ -20,6 +21,7 @@ class AIService:
             base_url=config.get_api_base()
         )
         self.model = config.get_translation_config().get('default_model')
+        print("初始化AI服务")
 
     def correct_subtitles(self, text: str, context_before: Optional[List[str]] = None, context_after: Optional[List[str]] = None) -> str:
         """
@@ -43,7 +45,7 @@ class AIService:
             {text}
 
             请只返回纠正后的文本，不要包含任何解释或额外的文本。如果文本已经正确，直接返回原文。"""
-
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -60,7 +62,10 @@ class AIService:
                 print(f"纠正后的文本: {response.choices[0].message.content.strip()}")
 
             return response.choices[0].message.content.strip()
-
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON解析错误: {e}")
+            # 发生错误时返回原文本
+            return text
         except Exception as e:
             logging.error(f"字幕纠错失败: {str(e)}")
             raise

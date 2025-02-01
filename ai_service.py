@@ -47,17 +47,7 @@ class AIService:
 
             请只返回纠正后的文本，不要包含任何解释或额外的文本。如果文本已经正确，直接返回原文。"""
             
-            response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "你是一个专业的语音识别后处理助手。你的任务是纠正语音识别的错误，确保文本通顺、准确，并与上下文保持一致。只返回纠正后的文本，不要添加任何解释。"
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    stream=False
-                )
+            response = self.sendChat(prompt,3)
             errResponse=response
             if response.choices[0].message.content.strip() != text:
                 print(f"需要纠正的文本: {text}")
@@ -73,6 +63,22 @@ class AIService:
         except Exception as e:
             logging.error(f"字幕纠错失败: {str(e)}")
             raise
+
+    def sendChat(self, prompt,retry_count=0):
+        response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "你是一个专业的语音识别后处理助手。你的任务是纠正语音识别的错误，确保文本通顺、准确，并与上下文保持一致。只返回纠正后的文本，不要添加任何解释。"
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=False
+                )
+        if response==None and retry_count>0:
+            return self.sendChat(prompt,retry_count-1)
+        return response
 
     def translate_text(self, text: str, target_lang: str, context_before: Optional[List[str]] = None, context_after: Optional[List[str]] = None) -> str:
         """
@@ -92,19 +98,30 @@ class AIService:
             if context_after:
                 context_prompt += f"后文：\n{'\n'.join(context_after)}\n\n"
 
-            prompt = f"""请将以下文本翻译成{target_lang}，注意保持原文的语气和风格，并确保与上下文保持连贯：
+            prompt = f"""你是一位专业的视频字幕翻译专家。请将以下文本翻译成{target_lang}。
+
+翻译要求：
+1. 严格保持原文的断句结构，如果原文分成两行，翻译后也必须保持两行
+2. 每行翻译的长度要适合字幕显示（不要太长）
+3. 保持原文的表达方式和语气
+4. 确保与上下文的连贯性
+5. 对于口语化的表达，翻译时要使用对应语言中自然的口语表达
+6. 保持专业术语的准确性
+7. 如果原文有重复或口吃，翻译时要适当保留这种特点
+
+注意：请严格按照原文的行数进行翻译，保持相同的断句结构，这对于字幕时间轴的对应至关重要。
 
 {context_prompt}需要翻译的文本：
 {text}
 
-请只返回翻译结果，不要包含任何解释或额外的文本。"""
+请只返回翻译结果，不要包含任何解释或额外的文本。每行翻译请单独成行，与原文结构保持一致。"""
 
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "你是一个专业的翻译助手，请直接提供翻译结果，不要添加任何解释或额外的文本。翻译时要考虑上下文，确保语义连贯。"
+                        "content": "你是一个专业的字幕翻译助手，必须严格保持原文的断句结构，确保翻译后的行数与原文完全一致。请直接提供翻译结果，不要添加任何解释或额外的文本。"
                     },
                     {"role": "user", "content": prompt}
                 ],

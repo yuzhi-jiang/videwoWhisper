@@ -315,12 +315,14 @@ class SubtitleProcessor:
 
                 # 收集结果
                 all_results = []
+                processed_count = 0 # 已处理场景数量
                 for future in concurrent.futures.as_completed(future_to_scene):
                     scene_index = future_to_scene[future]
                     try:
                         result = future.result()
+                        processed_count += 1
                         all_results.append((scene_index, result))
-                        logging.info(f"场景 {scene_index + 1}/{len(scenes)} 处理完成")
+                        logging.info(f"场景 {scene_index + 1}/{len(scenes)} 处理完成 已处理 {processed_count} 个场景")
                     except Exception as e:
                         logging.error(f"处理场景 {scene_index} 时出错: {str(e)}")
                         raise

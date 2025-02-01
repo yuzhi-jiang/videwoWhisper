@@ -1,6 +1,6 @@
 {
     "api": {
-        "openai_api_key": "your_api_key_here",
+        "openai_api_key": "sk-a34fcd80863040b8b5e30f44e5d018be",
         "openai_api_base": "https://api.deepseek.com",
         "default_model": "deepseek-chat"
     },

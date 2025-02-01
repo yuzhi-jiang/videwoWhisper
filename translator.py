@@ -42,7 +42,9 @@ class Translator:
 
     def translate_text(self, text: str, target_lang: str, **kwargs) -> str:
         """翻译文本"""
+        
         translated = self.ai_service.translate_text(text, target_lang, [], [])
+        logging.info(f"翻译文本============\n{text}\n============\n翻译结果:=============\n{translated}\n=============")
         return self.apply_word_dict(translated)
 
     def translate_srt(self, srt_file: str, target_lang: str, keep_original: bool = False) -> str:
@@ -65,7 +67,7 @@ class Translator:
 def test():
     translator = Translator()
     translator.set_word_dict('word_dict.txt')
-    translated_file = translator.translate_srt("uploads/test.srt", "英语", keep_original=True)
+    translated_file = translator.translate_srt("uploads/a_20250128_170342.srt", "英语", keep_original=True)
     print(f"翻译后的文件: {translated_file}")
 
 if __name__ == "__main__":
